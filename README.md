@@ -6,9 +6,6 @@ This plugin requires...
 
 Currently known to be incompatible with...
 - Implementations or plugins that change the behavior of `ServerWaypointManager`
+- Hotplug and `/reload`
 
 To install, build this project (Or grab from the releases page if there is any), then drop the artifact into your server's plugin folder, then restart the server.
-
-This plugin does NOT support Hotplug/reload, please do a full restart.
-
-This plugin can also work on non-Folia servers, currently I don't plan to make restrictions about this.
