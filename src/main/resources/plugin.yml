@@ -1,0 +1,10 @@
+name: folia-waypoint-impl
+version: '1.0'
+main: xyz.nifeather.foliaWaypointImpl.FoliaWaypointImpl
+api-version: '1.21'
+prefix: FoliaWaypointImpl
+load: STARTUP
+authors:
+  - "Lophine Devs"
+  - "MATRIX-feather"
+folia-supported: true
