@@ -1,9 +1,7 @@
 package xyz.nifeather.foliaWaypointImpl;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
-import com.google.common.collect.Table;
+import com.google.common.base.Supplier;
+import com.google.common.collect.*;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.waypoints.ServerWaypointManager;
 import net.minecraft.world.waypoints.WaypointTransmitter;
@@ -12,8 +10,10 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 public class SynchronizedWaypointManager extends ServerWaypointManager
@@ -201,6 +201,46 @@ public class SynchronizedWaypointManager extends ServerWaypointManager
         public SynchronizedForwardingTable(Table<R, C, V> table)
         {
             this.table = table;
+
+            try
+            {
+                replaceUnsafeMap();
+                logger.info("Done replacing backingMap and factory");
+            }
+            catch (NoSuchFieldException | IllegalAccessException e)
+            {
+                logger.error("Failed to replace backingMap or factory", e);
+            }
+        }
+
+        public Field findFieldIncludingSuperclasses(@NotNull Class<?> clazz, String fieldName) throws NoSuchFieldException
+        {
+            Class<?> currentClass = clazz;
+            while (currentClass != null)
+            {
+                try
+                {
+                    return currentClass.getDeclaredField(fieldName);
+                }
+                catch (NoSuchFieldException e)
+                {
+                    currentClass = currentClass.getSuperclass();
+                }
+            }
+
+            throw new NoSuchFieldException("Field " + fieldName + " not found in " + clazz.getName() + " or its superclasses.");
+        }
+
+        public void replaceUnsafeMap() throws NoSuchFieldException, IllegalAccessException
+        {
+            var backingMap = findFieldIncludingSuperclasses(table.getClass(), "backingMap");;
+            backingMap.setAccessible(true);
+            backingMap.set(table, new ConcurrentHashMap<R, Map<C, V>>());
+
+            var factory = findFieldIncludingSuperclasses(table.getClass(), "factory");;
+            factory.setAccessible(true);
+            var concurrentFactory = new ConcurrentFactory<C, V>(0);
+            factory.set(table, concurrentFactory);
         }
 
         protected @NotNull Table<R, C, V> delegate()
@@ -376,6 +416,20 @@ public class SynchronizedWaypointManager extends ServerWaypointManager
             synchronized (mutex)
             {
                 return delegate().columnMap();
+            }
+        }
+
+        public static class ConcurrentFactory<C, V> implements Supplier<Map<C, V>>
+        {
+            final int expectedSize;
+
+            ConcurrentFactory(int expectedSize) {
+                this.expectedSize = expectedSize;
+            }
+
+            @Override
+            public Map<C, V> get() {
+                return new ConcurrentHashMap<>(expectedSize);
             }
         }
     }
